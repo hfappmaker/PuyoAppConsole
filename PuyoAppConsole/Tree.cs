@@ -7,36 +7,63 @@ using System.Threading.Tasks;
 
 namespace PuyoAppConsole
 {
-    internal class Tree<T>
+    public interface ITree<out T>
     {
+        public T Value { get; }
 
-        public T Value { get; set; }
+        public IEnumerable<ITree<T>> Children { get; }
+    }
 
-        //public Tree<T> Parent { get; set; }
+    internal class Tree<T> : ITree<T>
+    {
+        public T Value { get; }
 
-        public Tree<T>[] Children => _children.ToArray();
+        public IEnumerable<ITree<T>> Children { get; }
 
-        private readonly List<Tree<T>> _children = new List<Tree<T>>();
+        public Tree(T value, IEnumerable<ITree<T>> children)
+        {
+            Value = value;
+            Children = children;
+        }
 
-        public Tree(T value, IEnumerable<Tree<T>> children)
+        public Tree(T value) : this(value, Enumerable.Empty<ITree<T>>())
+        {
+        }
+
+        public override string ToString()
+        {
+            return string.Join(",", this.GetDepthFirst());
+        }
+    }
+
+    public class ExpandTree<T> : ITree<T>
+    {
+        public T Value { get; }
+
+        public IEnumerable<ITree<T>> Children => _children;
+
+        public ExpandTree<T>? Parent { get; private set; }
+
+        private readonly List<ExpandTree<T>> _children = new();
+
+        public ExpandTree(T value, IEnumerable<ExpandTree<T>> children)
         {
             Value = value;
             AddChildren(children);
         }
 
-        public Tree(T value) : this(value, Enumerable.Empty<Tree<T>>())
+        public ExpandTree(T value) : this(value, Enumerable.Empty<ExpandTree<T>>())
         {
+
         }
 
-        public Tree() { }
-
-        public void AddChild(Tree<T> child)
+        public void AddChild(ExpandTree<T> value)
         {
-            //child.Parent = this;
-            _children.Add(child);
+            value.Parent = this;
+            _children.Add(value);
         }
 
-        public void AddChildren(IEnumerable<Tree<T>> children)
+        public void AddChildren(IEnumerable<ExpandTree<T>> children)
         {
             foreach (var child in children)
             {
@@ -44,72 +71,159 @@ namespace PuyoAppConsole
             }
         }
 
-        //public IEnumerator<T> GetEnumerator()
-        //{
-        //    yield return Value;
-        //    foreach (var child in Children)
-        //    {
-        //        child.GetEnumerator();
-        //    }
-        //}
+        public int Depth
+        {
+            get
+            {
+                int result = 0;
+                ExpandTree<T> current = this;
+                while(current.Parent != null)
+                {
+                    current = current.Parent;
+                    result++;
+                }
 
-        //IEnumerator IEnumerable.GetEnumerator()
-        //{
-        //    return GetEnumerator();
-        //}
+                return result;
+            }
+        }
+
+        public override string ToString()
+        {
+            return string.Join(",", this.GetDepthFirst());
+        }
+
+        public ExpandTree<T> GetAncestor(int depth)
+        {
+            ExpandTree<T> current = this;
+            while(current.Parent != null && depth < current.Depth)
+            {
+                current = current.Parent;
+            }
+
+            return current;
+        }
     }
 
     internal static class TreeExtension
     {
-        public static Tree<TResult> SelectMany<TSource, TCollection, TResult>
-            (this Tree<TSource> source, 
-            Func<TSource, Tree<TCollection>> collectionSelector, 
-            Func<TSource, TCollection, TResult> resultSelector)
+        public static IEnumerable<T> GetDepthFirst<T>(this ITree<T> source)
         {
-            return source.SelectMany(value => collectionSelector(value).Select(p => (value, p)).Select(tuple => resultSelector(tuple.value, tuple.p)));
+            var stack = new Stack<ITree<T>>();
+            stack.Push(source);
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                yield return current.Value;
+                foreach (var child in current.Children)
+                {
+                    stack.Push(child);
+                }
+            }
         }
 
-        public static Tree<TResult> SelectMany<TSource, TResult>(this Tree<TSource> source, Func<TSource, Tree<TResult>> resultSelector)
+        public static IEnumerable<TTree> GetDepthFirst<T, TTree>(this TTree source)
+            where TTree : ITree<T>
+        {
+            var stack = new Stack<TTree>();
+            stack.Push(source);
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                yield return current;
+                foreach (var child in current.Children)
+                {
+                    stack.Push((TTree)child);
+                }
+            }
+        }
+
+        public static ITree<TResult> SelectMany<TSource, TCollection, TResult>
+            (this ITree<TSource> source,
+            Func<TSource, ITree<TCollection>> collectionSelector,
+            Func<TSource, TCollection, TResult> resultSelector)
+        {
+            return source.SelectMany(sourceValue => collectionSelector(sourceValue).Select(item => (sourceValue, item)).Select(tuple => resultSelector(tuple.sourceValue, tuple.item)));
+        }
+
+        public static ITree<TResult> SelectMany<TSource, TResult>(this ITree<TSource> source, Func<TSource, ITree<TResult>> resultSelector)
         {
             return source.Select(resultSelector).Flatten();
         }
 
-        public static Tree<TSource> Flatten<TSource>(this Tree<Tree<TSource>> source)
+        public static ITree<TSource> Flatten<TSource>(this ITree<ITree<TSource>> source)
         {
-            var stack = new Stack<(Tree<TSource>, Tree<TSource>)>();
-            var result = new Tree<TSource>();
-            stack.Push((source.Value, result));
+            if (source.Value.Children.Any())
+            {
+                return new Tree<TSource>(source.Value.Value, source.Value.Children.Select(child => new Tree<ITree<TSource>>(child, source.Children)).Select(tree => tree.Flatten()));
+            }
+            else
+            {
+                return new Tree<TSource>(source.Value.Value, source.Children.Select(child => child.Flatten()));
+            }
+        }
+
+        public static ITree<TResult> Select<TSource, TResult>(this ITree<TSource> source, Func<TSource, TResult> resultSelector)
+        {
+            return new Tree<TResult>(resultSelector(source.Value), source.Children.Select(child => child.Select(resultSelector)));
+        }
+
+        public static ITree<TSource> CreateTree<TSource>(this TSource seed, Func<int, TSource, IEnumerable<TSource>> nextChildrenGetter)
+        {
+            return seed.CreateTree(0, nextChildrenGetter);
+        }
+
+        private static ITree<TSource> CreateTree<TSource>(this TSource seed, int depth, Func<int, TSource, IEnumerable<TSource>> childrenGetter)
+        {
+            return new Tree<TSource>(seed, childrenGetter?.Partial(depth).Invoke(seed).Select(arg => arg.CreateTree(depth + 1, childrenGetter)) ?? Enumerable.Empty<ITree<TSource>>());
+        }
+
+        public static ITree<TSource> TakeDepth<TSource>(this ITree<TSource> source, int depth)
+        {
+            if (depth == 0)
+            {
+                return new Tree<TSource>(source.Value);
+            }
+            else
+            {
+                return new Tree<TSource>(source.Value, source.Children.Select(child => child.TakeDepth(depth - 1)));
+            }
+        }
+
+        public static ExpandTree<TSource> ToExpand<TSource>(this ITree<TSource> source)
+        {
+            var stack = new Stack<(ITree<TSource>, ExpandTree<TSource>)>();
+            var result = new ExpandTree<TSource>(source.Value);
+            stack.Push((source, result));
             while (stack.Count > 0)
             {
-                var (currentTree , resultCurrentTree) = stack.Pop();
-                resultCurrentTree.Value = currentTree.Value;
-                if (currentTree.Children.Length > 0)
+                var (current, expandCurrent) = stack.Pop();
+
+                foreach (var child in current.Children)
                 {
-                    foreach (var child in currentTree.Children)
-                    {
-                        var resultNextTree = new Tree<TSource>();
-                        resultCurrentTree.AddChild(resultNextTree);
-                        stack.Push((child, resultNextTree));
-                    }
-                }
-                else
-                {
-                    foreach (var child in source.Children)
-                    {
-                        resultCurrentTree.AddChild(child.Flatten());
-                    }
+                    var expandChild = new ExpandTree<TSource>(child.Value);
+                    stack.Push((child, expandChild));
+                    expandCurrent.AddChild(expandChild);
                 }
             }
 
             return result;
         }
 
-        public static Tree<TResult> Select<TSource, TResult>(this Tree<TSource> source, Func<TSource, TResult> resultSelector)
-        {
-            return new Tree<TResult>(resultSelector(source.Value), source.Children.Select(child => child.Select(resultSelector)).ToArray());
-        }
+        //public static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int BeamWidth, Func<TSource, TKey> selector)
+        //{
+        //    if (startDepth <= 0)
+        //    {
+        //        return new Tree<TSource>(source.Value);
+        //    }
+        //    else
+        //    {
+        //        return new Tree<TSource>(source.Value, source.Children.Select(child => child.BeamSearch(startDepth - 1, BeamWidth, selector)));
+        //    }
+        //}
 
-        public static Func<TSource, Func<TCollection, TResult>> Curry<TSource, TCollection, TResult>(this Func<TSource, TCollection, TResult> func)
-            => source => collection => func(source, collection);
+        //private static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int BeamWidth, Func<TSource, TKey> selector)
+        //{
+
+        //}
     }
 }
