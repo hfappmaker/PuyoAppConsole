@@ -74,17 +74,17 @@ namespace PuyoAppConsole
         {
             return IsGameOver? this : puyoOperator.Vec switch
             {
-                0 => new PuyoField(Operate(_field, puyoOperator.Column, puyoOperator.Column + 1, tumo[0], tumo[1]), puyoOperator),
-                1 => new PuyoField(Operate(_field, puyoOperator.Column, puyoOperator.Column, tumo[0], tumo[1]), puyoOperator),
-                2 => new PuyoField(Operate(_field, puyoOperator.Column - 1, puyoOperator.Column, tumo[1], tumo[0]), puyoOperator),
-                3 => new PuyoField(Operate(_field, puyoOperator.Column, puyoOperator.Column, tumo[1], tumo[0]), puyoOperator),
+                0 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column + 1,    tumo[0], tumo[1]), puyoOperator),
+                1 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column,        tumo[0], tumo[1]), puyoOperator),
+                2 => new PuyoField(Operate(_field, puyoOperator.Column - 1, puyoOperator.Column,        tumo[1], tumo[0]), puyoOperator),
+                3 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column,        tumo[1], tumo[0]), puyoOperator),
                 _ => throw new ArgumentException(nameof(puyoOperator.Vec)),
             };
         }
 
         public int GetEvaluationValue()
         {
-            if (_field.Length % 12 == 0) return int.MaxValue;
+            //if (_field.Length % 12 == 0) return int.MaxValue;
 
             return IsGameOver ? -1 : Chain;
         }

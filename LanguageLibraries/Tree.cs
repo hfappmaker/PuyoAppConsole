@@ -270,6 +270,11 @@ namespace LanguageLibrary
                         _targetSourcesMultisets[depth].Remove(key);
                     }
 
+                    if (_targetSourcesMultisets[depth].Count == 0)
+                    {
+                        _targetSourcesMultisets.Remove(depth);
+                    }
+
                     return true;
                 }
 
