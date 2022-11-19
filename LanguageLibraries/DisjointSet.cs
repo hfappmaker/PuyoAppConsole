@@ -4,18 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PuyoAppConsole
+namespace LanguageLibrary
 {
-    internal class DisjointSet<T> where T : IEquatable<T>
+    public class DisjointSet<T> where T : IEquatable<T>
     {
-        /// <summary>
-        /// key:leader,value:size
-        /// </summary>
         private readonly Dictionary<T, int> _sizeDictionary = new();
 
-        /// <summary>
-        /// keyはleader以外
-        /// </summary>
         private readonly Dictionary<T, T> _parent = new(); 
 
         public DisjointSet(IEnumerable<T> vertices)

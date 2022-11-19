@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PuyoAppConsole
+namespace LanguageLibrary
 {
     public interface ITree<out T>
     {
@@ -32,7 +33,7 @@ namespace PuyoAppConsole
 
         public override string ToString()
         {
-            return string.Join(",", this.GetDepthFirst());
+            return string.Join(",", this.GetDepthFirst(true));
         }
     }
 
@@ -89,7 +90,7 @@ namespace PuyoAppConsole
 
         public override string ToString()
         {
-            return string.Join(",", this.GetDepthFirst());
+            return string.Join(",", this.GetDepthFirst<T, ExpandTree<T>>(true).Select(tree => (tree.Depth, tree.Value)));
         }
 
         public ExpandTree<T> GetAncestor(int depth)
@@ -104,9 +105,9 @@ namespace PuyoAppConsole
         }
     }
 
-    internal static class TreeExtension
+    public static class TreeExtension
     {
-        public static IEnumerable<T> GetDepthFirst<T>(this ITree<T> source)
+        public static IEnumerable<T> GetDepthFirst<T>(this ITree<T> source, bool isChildReverse = false)
         {
             var stack = new Stack<ITree<T>>();
             stack.Push(source);
@@ -114,14 +115,14 @@ namespace PuyoAppConsole
             {
                 var current = stack.Pop();
                 yield return current.Value;
-                foreach (var child in current.Children)
+                foreach (var child in isChildReverse ? current.Children.Reverse() : current.Children)
                 {
                     stack.Push(child);
                 }
             }
         }
 
-        public static IEnumerable<TTree> GetDepthFirst<T, TTree>(this TTree source)
+        public static IEnumerable<TTree> GetDepthFirst<T, TTree>(this TTree source, bool isChildReverse = false)
             where TTree : ITree<T>
         {
             var stack = new Stack<TTree>();
@@ -130,7 +131,7 @@ namespace PuyoAppConsole
             {
                 var current = stack.Pop();
                 yield return current;
-                foreach (var child in current.Children)
+                foreach (var child in isChildReverse ? current.Children.Reverse() : current.Children)
                 {
                     stack.Push((TTree)child);
                 }
@@ -197,33 +198,132 @@ namespace PuyoAppConsole
             while (stack.Count > 0)
             {
                 var (current, expandCurrent) = stack.Pop();
+                var tempStack = new Stack<(ITree<TSource>, ExpandTree<TSource>)>();
 
                 foreach (var child in current.Children)
                 {
                     var expandChild = new ExpandTree<TSource>(child.Value);
-                    stack.Push((child, expandChild));
+                    tempStack.Push((child, expandChild));
                     expandCurrent.AddChild(expandChild);
                 }
+
+                while (tempStack.Count > 0) stack.Push(tempStack.Pop());
             }
 
             return result;
         }
 
-        //public static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int BeamWidth, Func<TSource, TKey> selector)
-        //{
-        //    if (startDepth <= 0)
-        //    {
-        //        return new Tree<TSource>(source.Value);
-        //    }
-        //    else
-        //    {
-        //        return new Tree<TSource>(source.Value, source.Children.Select(child => child.BeamSearch(startDepth - 1, BeamWidth, selector)));
-        //    }
-        //}
+        public static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int beamWidth, Func<TSource, TKey> selector)
+            where TKey : IComparable<TKey>
 
-        //private static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int BeamWidth, Func<TSource, TKey> selector)
-        //{
+        {
+            if (startDepth == 0) throw new ArgumentException(nameof(startDepth));
+            if (beamWidth == 0) throw new ArgumentException(nameof(beamWidth));
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
 
-        //}
+            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, true));
+        }
+
+        public static ITree<TSource> BeamSearchAscending<TSource, TKey>(this ITree<TSource> source, int startDepth, int beamWidth, Func<TSource, TKey> selector)
+            where TKey : IComparable<TKey>
+
+        {
+            if (startDepth == 0) throw new ArgumentException(nameof(startDepth));
+            if (beamWidth == 0) throw new ArgumentException(nameof(beamWidth));
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, false));
+        }
+
+        private static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int currentDepth, TargetInfo<TSource, TKey> targetInfo)
+            where TKey : IComparable<TKey>
+
+        {
+            targetInfo.Ensure(currentDepth + 1);
+            return new Tree<TSource>(source.Value,
+                source.Children.Where(child => targetInfo.IsTarget(currentDepth + 1, child.Value))
+                                .Select(child => child.BeamSearch(currentDepth + 1, targetInfo)
+                        )
+            );
+        }
+
+        private class TargetInfo<TSource, TKey> where TKey : IComparable<TKey>
+        {
+            private readonly Dictionary<int, IEnumerable<ITree<TSource>>> _targetInfosDictionary = new(); 
+            private readonly Dictionary<int, Dictionary<TKey, int>> _targetSourcesMultisets = new();
+
+
+            public bool IsTarget(int depth, TSource value)
+            {
+                if (!_targetSourcesMultisets.ContainsKey(depth))
+                {
+                    _targetSourcesMultisets[depth] = _targetInfosDictionary[depth].Select(tree => tree.Value).GroupBy(Selector).ToDictionary(group => group.Key, group => group.Count());
+                }
+
+                var key = Selector(value);
+                if (_targetSourcesMultisets[depth].ContainsKey(key))
+                {
+                    _targetSourcesMultisets[depth][key]--;
+
+                    if (_targetSourcesMultisets[depth][key] == 0)
+                    {
+                        _targetSourcesMultisets[depth].Remove(key);
+                    }
+
+                    return true;
+                }
+
+                return false;
+            }
+
+
+            public Func<TSource, TKey> Selector { get; }
+
+            public int StartDepth { get; }
+
+            public int BeamDepth { get; }
+
+            public bool IsDescending { get; }
+
+            public TargetInfo(ITree<TSource> initialTarget, int startDepth, int beamWidth, Func<TSource, TKey> selector, bool isDescending)
+            {
+                _targetInfosDictionary[0] = initialTarget.ToEnumerable();
+                Selector = selector;
+                StartDepth = startDepth;
+                BeamDepth = beamWidth;
+                IsDescending = isDescending;
+            }
+
+            public void Ensure(int depth)
+            {
+                if (!_targetInfosDictionary.ContainsKey(depth))
+                {
+                    if (!_targetInfosDictionary.ContainsKey(depth - 1))
+                    {
+                        throw new ArgumentException(null, nameof(depth));
+                    }
+
+                    if (depth < StartDepth)
+                    {
+                        _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children);
+                    }
+                    else
+                    {
+                        if (IsDescending)
+                        {
+                            _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children)
+                                .OrderByDescending(child => Selector(child.Value))
+                                .Take(BeamDepth);
+                        }
+                        else
+                        {
+                            _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children)
+                                .OrderBy(child => Selector(child.Value))
+                                .Take(BeamDepth);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

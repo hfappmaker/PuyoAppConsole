@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32616.157
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PuyoAppConsole", "PuyoAppConsole\PuyoAppConsole.csproj", "{A97B0848-7B4B-43F8-9332-0A05B55DDF1E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PuyoAppConsole", "PuyoAppConsole\PuyoAppConsole.csproj", "{A97B0848-7B4B-43F8-9332-0A05B55DDF1E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LanguageLibrary", "LanguageLibraries\LanguageLibrary.csproj", "{24C3A333-3E3D-46AB-8051-C043E7D96586}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TreeTest", "TreeTest\TreeTest.csproj", "{65BFFBAC-917F-4C48-B000-E7AAAED6A32F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{A97B0848-7B4B-43F8-9332-0A05B55DDF1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A97B0848-7B4B-43F8-9332-0A05B55DDF1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A97B0848-7B4B-43F8-9332-0A05B55DDF1E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{24C3A333-3E3D-46AB-8051-C043E7D96586}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{24C3A333-3E3D-46AB-8051-C043E7D96586}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{24C3A333-3E3D-46AB-8051-C043E7D96586}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{24C3A333-3E3D-46AB-8051-C043E7D96586}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65BFFBAC-917F-4C48-B000-E7AAAED6A32F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65BFFBAC-917F-4C48-B000-E7AAAED6A32F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65BFFBAC-917F-4C48-B000-E7AAAED6A32F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65BFFBAC-917F-4C48-B000-E7AAAED6A32F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

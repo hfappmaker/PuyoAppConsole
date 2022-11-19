@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PuyoAppConsole
+namespace LanguageLibrary
 {
-    internal static class EnumerableExtension
+    public static class EnumerableExtension
     {
         public static IEnumerable<TSource> ToEnumerable<TSource>(this TSource value)
         {
