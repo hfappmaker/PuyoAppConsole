@@ -12,5 +12,8 @@ namespace LanguageLibrary
         {
             yield return value;
         }
+
+        public static IEnumerable<(int Index, TSource Element)> Indexed<TSource>(this IEnumerable<TSource> source)
+            => source.Select((element, index) => (index, element));
     }
 }

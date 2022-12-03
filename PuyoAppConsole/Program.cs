@@ -11,7 +11,7 @@ foreach (var count in Enumerable.Range(0,995))
     var tree = currentPuyoField.CreateTree((depth, value) =>
     {
         return PuyoOperator.Operators.Select(puyoOperator => value.Operate(puyoOperator, tumos[depth + count]));
-    }).BeamSearch(3, 1000, field => field.GetEvaluationValue()).TakeDepth(10);
+    }).BeamSearch(3, 100, field => new Random().Next(1000)).TakeDepth(10);
 
     var bestSimulateTree = tree.ToExpand().GetDepthFirst<PuyoField, ExpandTree<PuyoField>>().Where(field => field.Depth > 0)
         .MaxBy(field => field.Value.GetEvaluationValue());

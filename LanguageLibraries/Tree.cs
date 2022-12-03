@@ -105,6 +105,65 @@ namespace LanguageLibrary
         }
     }
 
+    public class TargetInfo<TSource, TKey>
+    {
+        private readonly Dictionary<int, Dictionary<string, ITree<TSource>>> _targetInfosDictionary = new();
+
+        public Dictionary<string, ITree<TSource>> this[int depth] => _targetInfosDictionary[depth];
+
+        public Func<TSource, TKey> Selector { get; }
+
+        public int StartDepth { get; }
+
+        public int BeamDepth { get; }
+
+        public bool IsDescending { get; }
+
+        public TargetInfo(ITree<TSource> initialTarget, int startDepth, int beamWidth, Func<TSource, TKey> selector, bool isDescending)
+        {
+            _targetInfosDictionary[0] = initialTarget.ToEnumerable().ToDictionary(p => string.Empty, p => p);
+            Selector = selector;
+            StartDepth = startDepth;
+            BeamDepth = beamWidth;
+            IsDescending = isDescending;
+        }
+
+        public void Ensure(int depth)
+        {
+            if (!_targetInfosDictionary.ContainsKey(depth))
+            {
+                if (!_targetInfosDictionary.ContainsKey(depth - 1))
+                {
+                    throw new ArgumentException(null, nameof(depth));
+                }
+
+                _targetInfosDictionary[depth] = GetTargetInfos(depth);
+            }
+        }
+
+        private Dictionary<string, ITree<TSource>> GetTargetInfos(int depth)
+        {
+            var result = _targetInfosDictionary[depth - 1]
+                        .SelectMany(target => target.Value.Children.Indexed().Select(pair => (ParentKey: target.Key, Value: pair)));
+
+            if (depth >= StartDepth)
+            {
+                if (IsDescending)
+                {
+                    result = result.OrderByDescending(child => Selector(child.Value.Element.Value));
+                }
+                else
+                {
+                    result = result.OrderBy(child => Selector(child.Value.Element.Value));
+                }
+
+                result = result.Take(BeamDepth);
+            }
+
+            return result.ToDictionary(child => string.Join(",", child.ParentKey, child.Value.Index).Trim(','), child => child.Value.Element);
+        }
+    }
+
     public static class TreeExtension
     {
         public static IEnumerable<T> GetDepthFirst<T>(this ITree<T> source, bool isChildReverse = false)
@@ -214,121 +273,28 @@ namespace LanguageLibrary
         }
 
         public static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int startDepth, int beamWidth, Func<TSource, TKey> selector)
-            where TKey : IComparable<TKey>
-
         {
             if (startDepth == 0) throw new ArgumentException(nameof(startDepth));
             if (beamWidth == 0) throw new ArgumentException(nameof(beamWidth));
             if (selector == null) throw new ArgumentNullException(nameof(selector));
-
-            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, true));
+            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, true), Enumerable.Empty<int>());
         }
 
         public static ITree<TSource> BeamSearchAscending<TSource, TKey>(this ITree<TSource> source, int startDepth, int beamWidth, Func<TSource, TKey> selector)
-            where TKey : IComparable<TKey>
-
         {
             if (startDepth == 0) throw new ArgumentException(nameof(startDepth));
             if (beamWidth == 0) throw new ArgumentException(nameof(beamWidth));
             if (selector == null) throw new ArgumentNullException(nameof(selector));
-
-            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, false));
+            return source.BeamSearch(0, new TargetInfo<TSource, TKey>(source, startDepth, beamWidth, selector, false), Enumerable.Empty<int>());
         }
 
-        private static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int currentDepth, TargetInfo<TSource, TKey> targetInfo)
-            where TKey : IComparable<TKey>
-
+        private static ITree<TSource> BeamSearch<TSource, TKey>(this ITree<TSource> source, int currentDepth, TargetInfo<TSource, TKey> targetInfo, IEnumerable<int> path)
         {
             targetInfo.Ensure(currentDepth + 1);
             return new Tree<TSource>(source.Value,
-                source.Children.Where(child => targetInfo.IsTarget(currentDepth + 1, child.Value))
-                                .Select(child => child.BeamSearch(currentDepth + 1, targetInfo)
-                        )
+                source.Children.Indexed().Where(pair => targetInfo[currentDepth + 1].ContainsKey(string.Join(",", path.Append(pair.Index))))
+                .Select(pair => targetInfo[currentDepth + 1][string.Join(",", path.Append(pair.Index))].BeamSearch(currentDepth + 1, targetInfo, path.Append(pair.Index)))
             );
-        }
-
-        private class TargetInfo<TSource, TKey> where TKey : IComparable<TKey>
-        {
-            private readonly Dictionary<int, IEnumerable<ITree<TSource>>> _targetInfosDictionary = new(); 
-            private readonly Dictionary<int, Dictionary<TKey, int>> _targetSourcesMultisets = new();
-
-
-            public bool IsTarget(int depth, TSource value)
-            {
-                if (!_targetSourcesMultisets.ContainsKey(depth))
-                {
-                    _targetSourcesMultisets[depth] = _targetInfosDictionary[depth].Select(tree => tree.Value).GroupBy(Selector).ToDictionary(group => group.Key, group => group.Count());
-                }
-
-                var key = Selector(value);
-                if (_targetSourcesMultisets[depth].ContainsKey(key))
-                {
-                    _targetSourcesMultisets[depth][key]--;
-
-                    if (_targetSourcesMultisets[depth][key] == 0)
-                    {
-                        _targetSourcesMultisets[depth].Remove(key);
-                    }
-
-                    if (_targetSourcesMultisets[depth].Count == 0)
-                    {
-                        _targetSourcesMultisets.Remove(depth);
-                    }
-
-                    return true;
-                }
-
-                return false;
-            }
-
-
-            public Func<TSource, TKey> Selector { get; }
-
-            public int StartDepth { get; }
-
-            public int BeamDepth { get; }
-
-            public bool IsDescending { get; }
-
-            public TargetInfo(ITree<TSource> initialTarget, int startDepth, int beamWidth, Func<TSource, TKey> selector, bool isDescending)
-            {
-                _targetInfosDictionary[0] = initialTarget.ToEnumerable();
-                Selector = selector;
-                StartDepth = startDepth;
-                BeamDepth = beamWidth;
-                IsDescending = isDescending;
-            }
-
-            public void Ensure(int depth)
-            {
-                if (!_targetInfosDictionary.ContainsKey(depth))
-                {
-                    if (!_targetInfosDictionary.ContainsKey(depth - 1))
-                    {
-                        throw new ArgumentException(null, nameof(depth));
-                    }
-
-                    if (depth < StartDepth)
-                    {
-                        _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children);
-                    }
-                    else
-                    {
-                        if (IsDescending)
-                        {
-                            _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children)
-                                .OrderByDescending(child => Selector(child.Value))
-                                .Take(BeamDepth);
-                        }
-                        else
-                        {
-                            _targetInfosDictionary[depth] = _targetInfosDictionary[depth - 1].SelectMany(target => target.Children)
-                                .OrderBy(child => Selector(child.Value))
-                                .Take(BeamDepth);
-                        }
-                    }
-                }
-            }
         }
     }
 }

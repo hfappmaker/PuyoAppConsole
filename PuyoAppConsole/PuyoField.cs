@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using LanguageLibrary;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace PuyoAppConsole
 {
@@ -99,14 +100,25 @@ namespace PuyoAppConsole
             }
 
             var delta = firstColumn < OutputColumn ? -1 : 1;
-            while (firstColumn * delta > currentFirstColumn * delta && field[currentFirstColumn + delta].Length < RowCount - Convert.ToInt32(firstColumn == secondColumn))
+            while (firstColumn * delta > currentFirstColumn * delta && field[currentFirstColumn + delta].Length < RowCount - Convert.ToInt32(firstColumn == secondColumn)
+                && field[currentFirstColumn + delta + secondColumn - firstColumn].Length < RowCount)
             {
                 currentFirstColumn += delta;
             }
 
             result[currentFirstColumn].Add(first);
-            result[currentFirstColumn + secondColumn - firstColumn].Add(second);
 
+            if (field[currentFirstColumn + secondColumn - firstColumn].Length == RowCount)
+            {
+                result[currentFirstColumn].Add(second);
+            }
+            else
+            {
+                result[currentFirstColumn + secondColumn - firstColumn].Add(second);
+            }
+
+            Debug.Assert(result.All(column => column.Count <= RowCount));
+                    
             return ChainSimulate(result.Select(column => column.ToArray()).ToArray(), 0);
         }
 
