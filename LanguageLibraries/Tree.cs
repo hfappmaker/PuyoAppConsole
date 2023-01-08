@@ -227,14 +227,14 @@ namespace LanguageLibrary
             return new Tree<TResult>(resultSelector(source.Value), source.Children.Select(child => child.Select(resultSelector)));
         }
 
-        public static ITree<TSource> CreateTree<TSource>(this TSource seed, Func<int, TSource, IEnumerable<TSource>> nextChildrenGetter)
+        public static ITree<TSource> CreateTree<TSource>(this TSource seed, Func<TSource, int, IEnumerable<TSource>> childrenSelector)
         {
-            return seed.CreateTree(0, nextChildrenGetter);
+            return seed.CreateTree(0, childrenSelector);
         }
 
-        private static ITree<TSource> CreateTree<TSource>(this TSource seed, int depth, Func<int, TSource, IEnumerable<TSource>> childrenGetter)
+        private static ITree<TSource> CreateTree<TSource>(this TSource seed, int depth, Func<TSource, int, IEnumerable<TSource>> childrenSelector)
         {
-            return new Tree<TSource>(seed, childrenGetter?.Partial(depth).Invoke(seed).Select(arg => arg.CreateTree(depth + 1, childrenGetter)) ?? Enumerable.Empty<ITree<TSource>>());
+            return new Tree<TSource>(seed, childrenSelector(seed, depth).Select(arg => arg.CreateTree(depth + 1, childrenSelector)));
         }
 
         public static ITree<TSource> TakeDepth<TSource>(this ITree<TSource> source, int depth)

@@ -10,15 +10,15 @@ namespace PuyoAppConsole
 {
     internal class PuyoField
     {
-        public const int RowCount = 13;
+        public int RowCount { get; }
 
-        public const int ColumnCount = 6;
+        public int ColumnCount { get; }
 
-        public const int HideCount = 1;
+        public int HideCount { get; }
 
-        public const int OutputColumn = 2;
+        public int OutputColumn { get; }
 
-        public const int DeleteCount = 4;
+        public int DeleteCount { get; }
 
         public static Point[] Axises { get; } = new Point[4]
         {
@@ -51,64 +51,64 @@ namespace PuyoAppConsole
             }
         }
 
-        public int Chain { get; }
-
-        public PuyoOperator? Operator { get; }
-
-        public PuyoField(int[][] field, int chain, PuyoOperator? puyoOperator)
+        public PuyoField(int[][] field, int rowCount, int hideConut, int outputColumn, int deleteCount)
         {
             _field = field;
-            Chain = chain;
-            Operator = puyoOperator;
+            RowCount = rowCount;
+            ColumnCount = field.GetLength(0);
+            HideCount = hideConut;
+            OutputColumn = outputColumn;
+            DeleteCount = deleteCount;
         }
 
-        public PuyoField((int[][] Field, int Chain) tuple, PuyoOperator puyoOperator) : this(tuple.Field, tuple.Chain, puyoOperator)
-        {
-        }
-
-        public PuyoField() : this(Enumerable.Repeat(Array.Empty<int>(), ColumnCount).ToArray(), 0, null)
+        public PuyoField(int rowCount, int columnCount, int hideConut, int outputColumn, int deleteCount) : this(Enumerable.Repeat(Array.Empty<int>(), columnCount).ToArray(), rowCount, hideConut, outputColumn, deleteCount)
         {
 
         }
 
-        public PuyoField Operate(PuyoOperator puyoOperator, int[] tumo)
+        public (PuyoField PuyoField, int Chain, int[][] DeletedColors) Operate(PuyoOperator puyoOperator, int[] tumo)
         {
-            return IsGameOver? this : puyoOperator.Vec switch
+            return IsGameOver? (this, -1, new int[0][]) : puyoOperator.Vec switch
             {
-                0 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column + 1,    tumo[0], tumo[1]), puyoOperator),
-                1 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column,        tumo[0], tumo[1]), puyoOperator),
-                2 => new PuyoField(Operate(_field, puyoOperator.Column - 1, puyoOperator.Column,        tumo[1], tumo[0]), puyoOperator),
-                3 => new PuyoField(Operate(_field, puyoOperator.Column,     puyoOperator.Column,        tumo[1], tumo[0]), puyoOperator),
+                0 => Operate(puyoOperator.Column,     puyoOperator.Column + 1,    tumo[0], tumo[1]),
+                1 => Operate(puyoOperator.Column,     puyoOperator.Column,        tumo[0], tumo[1]),
+                2 => Operate(puyoOperator.Column - 1, puyoOperator.Column,        tumo[1], tumo[0]),
+                3 => Operate(puyoOperator.Column,     puyoOperator.Column,        tumo[1], tumo[0]),
                 _ => throw new ArgumentException(nameof(puyoOperator.Vec)),
             };
         }
 
-        public int GetEvaluationValue()
+        public double GetEvaluationValue(PuyoTwoChainInfo[] infos, PuyoField? parentPuyoField, int parentChain)
         {
-            //if (_field.Length % 12 == 0) return int.MaxValue;
+            if (IsGameOver) return double.MinValue;
 
-            return IsGameOver ? -1 : Chain;
+            double res = 0;
+            foreach (var info in infos)
+            {
+                res += info.Match(this, parentPuyoField, parentChain);
+            }
+            return res;
         }
 
-        private static (int[][] Field, int Chain) Operate(int[][] field, int firstColumn, int secondColumn, int first, int second)
+        private (PuyoField PuyoField, int Chain, int[][] DeletedColors) Operate(int firstColumn, int secondColumn, int first, int second)
         {
             var currentFirstColumn = OutputColumn;
-            var result = new List<List<int>>(field.GetLength(0));
-            foreach (var column in field)
+            var result = new List<List<int>>(_field.GetLength(0));
+            foreach (var column in _field)
             {
                 result.Add(new List<int>(column));
             }
 
             var delta = firstColumn < OutputColumn ? -1 : 1;
-            while (firstColumn * delta > currentFirstColumn * delta && field[currentFirstColumn + delta].Length < RowCount - Convert.ToInt32(firstColumn == secondColumn)
-                && field[currentFirstColumn + delta + secondColumn - firstColumn].Length < RowCount)
+            while (firstColumn * delta > currentFirstColumn * delta && _field[currentFirstColumn + delta].Length < RowCount - Convert.ToInt32(firstColumn == secondColumn)
+                && _field[currentFirstColumn + delta + secondColumn - firstColumn].Length < RowCount)
             {
                 currentFirstColumn += delta;
             }
 
             result[currentFirstColumn].Add(first);
 
-            if (field[currentFirstColumn + secondColumn - firstColumn].Length == RowCount)
+            if (_field[currentFirstColumn + secondColumn - firstColumn].Length == RowCount)
             {
                 result[currentFirstColumn].Add(second);
             }
@@ -118,13 +118,19 @@ namespace PuyoAppConsole
             }
 
             Debug.Assert(result.All(column => column.Count <= RowCount));
-                    
-            return ChainSimulate(result.Select(column => column.ToArray()).ToArray(), 0);
+
+            var nextField = new PuyoField(result.Select(column => column.ToArray()).ToArray(), RowCount, HideCount, OutputColumn, DeleteCount);
+            return nextField.ChainSimulate();
         }
 
-        private static (int[][] Field, int Chain) ChainSimulate(int[][] field, int chain)
+        public (PuyoField PuyoField, int Chain, int[][] DeletedColors) ChainSimulate()
         {
-            var fieldInfos = field.SelectMany((column, ColumnIndex) => column.Select((cell, RowIndex) => (ColumnIndex, RowIndex))).ToArray();
+            return ChainSimulate(0, new List<HashSet<int>>());
+        }
+
+        private (PuyoField PuyoField, int Chain, int[][] DeletedColors) ChainSimulate(int chain, IList<HashSet<int>> deletedColors)
+        {
+            var fieldInfos = _field.SelectMany((column, ColumnIndex) => column.Select((cell, RowIndex) => (ColumnIndex, RowIndex))).ToArray();
 
             DisjointSet<(int Column, int Row)> disjointSet = new(fieldInfos);
 
@@ -137,10 +143,10 @@ namespace PuyoAppConsole
 
                 if (0 > x1 || x1 >= ColumnCount) return false;
                 if (0 > x2 || x2 >= ColumnCount) return false;
-                if (0 > y1 || y1 >= Math.Min(field[x1].Length, RowCount - HideCount)) return false;
-                if (0 > y2 || y2 >= Math.Min(field[x2].Length, RowCount - HideCount)) return false;
+                if (0 > y1 || y1 >= Math.Min(_field[x1].Length, RowCount - HideCount)) return false;
+                if (0 > y2 || y2 >= Math.Min(_field[x2].Length, RowCount - HideCount)) return false;
 
-                return field[x1][y1] == field[x2][y2];
+                return _field[x1][y1] == _field[x2][y2];
             }
 
             foreach (var item in fieldInfos)
@@ -155,20 +161,32 @@ namespace PuyoAppConsole
             }
 
             var deleteTargets = disjointSet.Groups().Where(group => group.Length >= DeleteCount).SelectMany(arg => arg).ToArray();
-            foreach (var (columnIndex, rowIndex) in deleteTargets)
-            {
-                field[columnIndex][rowIndex] = -2;
-            }
-
-            var afterField = field.Select(column => column.Where(cell => cell != -2).ToArray()).ToArray();
+            var afterField = _field.Select(column => column.ToArray()).ToArray();
 
             if (deleteTargets.Length > 0)
             {
-                return ChainSimulate(afterField, chain + 1);
+                var deletedColor = new HashSet<int>();
+
+                foreach (var (columnIndex, rowIndex) in deleteTargets)
+                {
+                    deletedColor.Add(afterField[columnIndex][rowIndex]);
+                    afterField[columnIndex][rowIndex] = -2;
+                }
+
+                deletedColors.Add(deletedColor);
+
+                afterField = afterField.Select(column => column.Where(cell => cell != -2).ToArray()).ToArray();
+            }
+
+            var nextField = new PuyoField(afterField, RowCount, HideCount, OutputColumn, DeleteCount);
+
+            if (deleteTargets.Length > 0)
+            {
+                return nextField.ChainSimulate(chain + 1, deletedColors);
             }
             else
             {
-                return (afterField, chain);
+                return (nextField, chain, deletedColors.Select(set => set.ToArray()).ToArray());
             }
         }
 

@@ -9,7 +9,7 @@ namespace TreeTest
         public void TreeTest1()
         {
             var result = 0
-                .CreateTree((depth, current) => {
+                .CreateTree((current, depth) => {
                     return Enumerable.Range(current, 2);
                 })
                 .BeamSearch(2, 2, current => current);
@@ -22,7 +22,7 @@ namespace TreeTest
         public void TreeTest2()
         {
             var result = 0
-                .CreateTree((depth, current) => {
+                .CreateTree((current, depth) => {
                     return Enumerable.Range(current, 2);
                 })
                 .TakeDepth(2)
